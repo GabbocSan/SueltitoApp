@@ -7,6 +7,25 @@
   "client": [
     {
       "client_info": {
+        "mobilesdk_app_id": "1:526810822486:android:597bd4ad9221184eaf48f7",
+        "android_client_info": {
+          "package_name": "com.example.suletitoapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAT_qMk2OBCKza_gy7slsFu8VQVZqHCVxs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
         "mobilesdk_app_id": "1:526810822486:android:eb039de99fe9315aaf48f7",
         "android_client_info": {
           "package_name": "com.suletitoapp"
