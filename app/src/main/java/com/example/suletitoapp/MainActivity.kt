@@ -17,6 +17,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -33,23 +34,40 @@ import com.google.firebase.auth.PhoneAuthCredential
 import com.google.firebase.auth.PhoneAuthOptions
 import com.google.firebase.FirebaseException
 import java.util.concurrent.TimeUnit
+import com.google.firebase.database.FirebaseDatabase
+import com.example.suletitoapp.model.Usuario
+
 
 
 class MainActivity : ComponentActivity() {
+
+    //Variables de Firebase
     private lateinit var auth: FirebaseAuth
     private lateinit var storedVerificationId: String
     private lateinit var resendToken: PhoneAuthProvider.ForceResendingToken
 
+    //Inicio del Programa
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         auth = FirebaseAuth.getInstance()
         enableEdgeToEdge()
+
         setContent {
             SuletitoAppTheme {
-                LoginScreen(
-                    onSendCode = { phone -> sendVerificationCode(phone) },
-                    onVerifyCode = { code -> verifyCode(code) }
-                )
+                val pantallaActual = remember { mutableStateOf("login") }
+
+                when (pantallaActual.value) {
+                    "login" -> LoginScreen(
+                        onSendCode = { phone -> sendVerificationCode(phone) },
+                        onVerifyCode = { code -> verifyCode(code) },
+                        onCambiarAPantallaRegistro = { pantallaActual.value = "registro" }
+                    )
+
+                    "registro" -> RegistroScreen(
+                        onRegistrar = { usuario -> registrarUsuario(usuario) },
+                        onVolverALogin = { pantallaActual.value = "login" }
+                    )
+                }
             }
         }
     }
@@ -65,15 +83,19 @@ class MainActivity : ComponentActivity() {
         PhoneAuthProvider.verifyPhoneNumber(options)
     }
 
+    //Callback de Firebase
     private val callbacks = object : PhoneAuthProvider.OnVerificationStateChangedCallbacks() {
+        //Clase para manejar las respeustas de firebase
         override fun onVerificationCompleted(credential: PhoneAuthCredential) {
             signInWithPhoneAuthCredential(credential)
         }
 
+        //Si Firebase detecta el código automáticamente (SMS recibido), inicia sesión.
         override fun onVerificationFailed(e: FirebaseException) {
             Toast.makeText(this@MainActivity, "Error: ${e.message}", Toast.LENGTH_LONG).show()
         }
 
+        //Si algo falla (número inválido, red, etc.), muestra un mensaje.
         override fun onCodeSent(
             verificationId: String,
             token: PhoneAuthProvider.ForceResendingToken
@@ -84,6 +106,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    //Convierte el código ingresado en credenciales, llama a signInWithPhoneAuthCredential.
     private fun verifyCode(code: String) {
         val credential = PhoneAuthProvider.getCredential(storedVerificationId, code)
         signInWithPhoneAuthCredential(credential)
@@ -100,32 +123,41 @@ class MainActivity : ComponentActivity() {
                 }
             }
     }
+
+    private fun registrarUsuario(usuario: Usuario) {
+        val db = FirebaseDatabase.getInstance().reference
+        val userId = usuario.telefono.replace("+", "")
+        db.child("usuarios").child(userId).setValue(usuario)
+            .addOnSuccessListener {
+                Toast.makeText(this, "Usuario registrado correctamente", Toast.LENGTH_SHORT).show()
+            }
+            .addOnFailureListener {
+                Toast.makeText(this, "Error al registrar: ${it.message}", Toast.LENGTH_SHORT).show()
+            }
+    }
 }
 
 
 
-@Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
-    )
-}
-
+//Pantalla de inicio
 @Composable
 fun LoginScreen(
     onSendCode: (String) -> Unit,
-    onVerifyCode: (String) -> Unit
+    onVerifyCode: (String) -> Unit,
+    onCambiarAPantallaRegistro: () -> Unit
 ) {
+    //Recibe dos funciones: para enviar y verificar código.
     var phoneNumber by remember { mutableStateOf("") }
     var verificationCode by remember { mutableStateOf("") }
 
+    //Interfaz grafica
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(24.dp),
         verticalArrangement = Arrangement.Center
     ) {
+        //Campo para ingresar el numero
         OutlinedTextField(
             value = phoneNumber,
             onValueChange = { phoneNumber = it },
@@ -137,6 +169,7 @@ fun LoginScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
+        //Boton
         Button(
             onClick = { onSendCode(phoneNumber) },
             modifier = Modifier.fillMaxWidth()
@@ -146,6 +179,7 @@ fun LoginScreen(
 
         Spacer(modifier = Modifier.height(24.dp))
 
+        //Campo para escribir el codigo
         OutlinedTextField(
             value = verificationCode,
             onValueChange = { verificationCode = it },
@@ -162,14 +196,15 @@ fun LoginScreen(
         ) {
             Text("Verificar código")
         }
+        Spacer(modifier = Modifier.height(16.dp))
+
+        TextButton(
+            onClick = { onCambiarAPantallaRegistro() },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("¿No tienes cuenta? Regístrate")
+        }
     }
 }
 
 
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-    SuletitoAppTheme {
-        Greeting("Android")
-    }
-}
