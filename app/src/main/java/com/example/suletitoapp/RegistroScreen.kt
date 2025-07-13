@@ -86,7 +86,7 @@ fun RegistroScreen(
                     errorMensaje = "Número de teléfono inválido. Usa el formato +591..."
                 } else {
                     errorMensaje = null
-                    onRegistrar(Usuario(nombres, apellidos, rol, telefono))
+                    onRegistrar(Usuario(nombres, apellidos, rol, telefono, saldo = 0.0))
                 }
             },
             modifier = Modifier.fillMaxWidth()

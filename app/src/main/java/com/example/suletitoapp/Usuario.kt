@@ -5,5 +5,5 @@ data class Usuario(
     var apellidos: String = "",
     var rol: String = "",
     var telefono: String = "",
-    var saldo: Int = 0
+    var saldo: Double = 0.0
 )
