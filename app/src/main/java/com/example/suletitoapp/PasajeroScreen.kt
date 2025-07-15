@@ -19,7 +19,7 @@ import androidx.compose.ui.unit.sp
 
 
 @Composable
-fun PasajeroScreen(nombre: String, saldo: Double) {
+fun PasajeroScreen(nombre: String, saldo: Double, onCerrarSesion: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -97,6 +97,19 @@ fun PasajeroScreen(nombre: String, saldo: Double) {
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("Ver historial")
+        }
+
+        Spacer(modifier = Modifier.height(32.dp))
+
+        // Botón de cerrar sesión
+        OutlinedButton(
+            onClick = { onCerrarSesion() },
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.outlinedButtonColors(
+                contentColor = MaterialTheme.colorScheme.error
+            )
+        ) {
+            Text("Cerrar sesión")
         }
     }
 }

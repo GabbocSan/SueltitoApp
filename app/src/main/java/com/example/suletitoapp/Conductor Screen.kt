@@ -18,7 +18,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.sp
 
 @Composable
-fun ConductorScreen(nombre: String, saldo: Double) {
+fun ConductorScreen(nombre: String, saldo: Double, onCerrarSesion: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -105,6 +105,19 @@ fun ConductorScreen(nombre: String, saldo: Double) {
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("Configuración")
+        }
+
+        Spacer(modifier = Modifier.height(32.dp))
+
+        // Botón de cerrar sesión
+        OutlinedButton(
+            onClick = { onCerrarSesion() },
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.outlinedButtonColors(
+                contentColor = MaterialTheme.colorScheme.error
+            )
+        ) {
+            Text("Cerrar sesión")
         }
     }
 }

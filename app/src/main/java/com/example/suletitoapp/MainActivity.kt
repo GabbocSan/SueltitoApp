@@ -109,8 +109,24 @@ class MainActivity : ComponentActivity() {
                     "principal" -> {
                         usuarioActual.value?.let { usuario ->
                             when (usuario.rol) {
-                                "Chofer" -> ConductorScreen(usuario.nombres, usuario.saldo)
-                                "Pasajero" -> PasajeroScreen(usuario.nombres, usuario.saldo)
+                                "Chofer" -> ConductorScreen(
+                                    usuario.nombres,
+                                    usuario.saldo,
+                                    onCerrarSesion = {
+                                        cerrarSesion()
+                                        usuarioActual.value = null
+                                        pantallaActual.value = "login"
+                                    }
+                                )
+                                "Pasajero" -> PasajeroScreen(
+                                    usuario.nombres,
+                                    usuario.saldo,
+                                    onCerrarSesion = {
+                                        cerrarSesion()
+                                        usuarioActual.value = null
+                                        pantallaActual.value = "login"
+                                    }
+                                )
                                 else -> Text("Rol no reconocido")
                             }
                         } ?: Text("Cargando datos...")
@@ -312,6 +328,22 @@ class MainActivity : ComponentActivity() {
         } else {
             Toast.makeText(this, "Error: usuario no autenticado", Toast.LENGTH_SHORT).show()
         }
+    }
+
+    private fun cerrarSesion() {
+        auth.signOut()
+
+        storedVerificationId = null
+        resendToken = null
+        codigoEnviado.value = false
+        mensajeError.value = ""
+        isLoading.value = false
+
+        currentOnSuccess = null
+        currentOnNeedRegistration = null
+
+        Toast.makeText(this, "Sesión cerrada correctamente", Toast.LENGTH_SHORT).show()
+        Log.d("AUTH", "Sesión cerrada por el usuario")
     }
 }
 
