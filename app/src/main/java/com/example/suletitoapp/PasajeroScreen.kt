@@ -19,7 +19,11 @@ import androidx.compose.ui.unit.sp
 
 
 @Composable
-fun PasajeroScreen(nombre: String, saldo: Double, onCerrarSesion: () -> Unit) {
+fun PasajeroScreen(nombre: String,
+                   saldo: Double,
+                   onCerrarSesion: () -> Unit,
+                   onRecargarSaldo: () -> Unit
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -84,7 +88,7 @@ fun PasajeroScreen(nombre: String, saldo: Double, onCerrarSesion: () -> Unit) {
         Spacer(modifier = Modifier.height(16.dp))
 
         Button(
-            onClick = { /* TODO: Implementar recarga */ },
+            onClick = { onRecargarSaldo() },
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("Recargar saldo")

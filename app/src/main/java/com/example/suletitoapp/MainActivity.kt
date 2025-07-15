@@ -125,11 +125,32 @@ class MainActivity : ComponentActivity() {
                                         cerrarSesion()
                                         usuarioActual.value = null
                                         pantallaActual.value = "login"
+                                    },
+                                    onRecargarSaldo = {
+                                        pantallaActual.value = "recarga"
                                     }
                                 )
                                 else -> Text("Rol no reconocido")
                             }
                         } ?: Text("Cargando datos...")
+                    }
+                    "recarga" -> {
+                        usuarioActual.value?.let { usuario ->
+                            RecargaSaldoScreen(
+                                saldoActual = usuario.saldo,
+                                onRecargar = { monto ->
+                                    recargarSaldo(monto)
+                                    // Actualizar el usuario actual con el nuevo saldo
+                                    usuarioActual.value = usuario.copy(saldo = usuario.saldo + monto)
+                                    // Volver a la pantalla principal
+                                    pantallaActual.value = "principal"
+                                },
+                                onCancelar = {
+                                    // Volver a la pantalla principal sin cambios
+                                    pantallaActual.value = "principal"
+                                }
+                            )
+                        } ?: Text("Error: Usuario no encontrado")
                     }
                 }
             }
@@ -344,6 +365,38 @@ class MainActivity : ComponentActivity() {
 
         Toast.makeText(this, "Sesión cerrada correctamente", Toast.LENGTH_SHORT).show()
         Log.d("AUTH", "Sesión cerrada por el usuario")
+    }
+
+    private fun recargarSaldo(monto: Double) {
+        val userId = auth.currentUser?.uid
+
+        if (userId != null) {
+            val db = FirebaseDatabase.getInstance().reference
+
+            // Obtener saldo actual y sumarlo
+            db.child("usuarios").child(userId).child("saldo").get()
+                .addOnSuccessListener { snapshot ->
+                    val saldoActual = snapshot.getValue(Double::class.java) ?: 0.0
+                    val nuevoSaldo = saldoActual + monto
+
+                    // Actualizar saldo en la base de datos
+                    db.child("usuarios").child(userId).child("saldo").setValue(nuevoSaldo)
+                        .addOnSuccessListener {
+                            Toast.makeText(this, "Recarga exitosa: +Bs. $monto", Toast.LENGTH_SHORT).show()
+                            Log.d("RECARGA", "Saldo recargado: $monto. Nuevo saldo: $nuevoSaldo")
+                        }
+                        .addOnFailureListener { exception ->
+                            Toast.makeText(this, "Error al recargar: ${exception.message}", Toast.LENGTH_SHORT).show()
+                            Log.e("RECARGA", "Error al recargar saldo: ${exception.message}")
+                        }
+                }
+                .addOnFailureListener { exception ->
+                    Toast.makeText(this, "Error al obtener saldo actual: ${exception.message}", Toast.LENGTH_SHORT).show()
+                    Log.e("RECARGA", "Error al obtener saldo: ${exception.message}")
+                }
+        } else {
+            Toast.makeText(this, "Error: Usuario no autenticado", Toast.LENGTH_SHORT).show()
+        }
     }
 }
 
