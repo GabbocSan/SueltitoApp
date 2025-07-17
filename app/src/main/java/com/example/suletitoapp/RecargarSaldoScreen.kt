@@ -115,7 +115,7 @@ fun RecargaSaldoScreen(
                     contentColor = MaterialTheme.colorScheme.error
                 )
             ) {
-                Text("Cancelar")
+                Text("Atras")
             }
 
             Spacer(modifier = Modifier.width(16.dp))

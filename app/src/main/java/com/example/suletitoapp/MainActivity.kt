@@ -84,6 +84,9 @@ class MainActivity : ComponentActivity() {
     private val currentPaymentAmount = mutableStateOf(0.0)
     private val currentConductorData = mutableStateOf<Pair<String, String>?>(null)
 
+    private val saldoActualizado = mutableStateOf(0.0)
+    private val debeActualizarSaldo = mutableStateOf(false)
+
     //Inicio del Programa
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -205,6 +208,12 @@ class MainActivity : ComponentActivity() {
                     }
                     "nfc_pago" -> {
                         usuarioActual.value?.let { usuario ->
+
+                            if (debeActualizarSaldo.value) {
+                                usuarioActual.value = usuario.copy(saldo = saldoActualizado.value)
+                                debeActualizarSaldo.value = false
+                            }
+
                             NFCPagoScreen(
                                 pasajeroNombre = "${usuario.nombres} ${usuario.apellidos}",
                                 saldoActual = usuario.saldo,
@@ -218,7 +227,8 @@ class MainActivity : ComponentActivity() {
                                     pantallaActual.value = "principal"
                                 },
                                 isProcessing = isProcessingPayment.value,
-                                mensaje = nfcMessage.value
+                                mensaje = nfcMessage.value,
+
                             )
                         }
                     }
@@ -416,34 +426,47 @@ class MainActivity : ComponentActivity() {
                             db.updateChildren(updates)
                                 .addOnSuccessListener {
                                     // Crear registro de pago
+
                                     crearRegistroPago(pasajeroId, conductorId, pasajeroNombre, conductorNombre, monto)
 
-                                    // Actualizar estado
-                                    nfcMessage.value = "¡Pago exitoso! Bs. $monto"
-                                    isProcessingPayment.value = false
-                                    nfcReadMode.value = false
+                                    runOnUiThread{
 
-                                    // Enviar notificación al conductor
-                                    enviarNotificacionConductor(conductorId, pasajeroNombre, monto)
+                                        actualizarSaldoUsuario(nuevoSaldoPasajero)
 
-                                    Toast.makeText(this, "Pago procesado exitosamente", Toast.LENGTH_LONG).show()
+                                        // Actualizar estado
+                                        nfcMessage.value = "¡Pago exitoso! Bs. $monto"
+                                        isProcessingPayment.value = false
+                                        nfcReadMode.value = false
+
+                                        // Enviar notificación al conductor
+                                        enviarNotificacionConductor(conductorId, pasajeroNombre, monto)
+
+                                        Toast.makeText(this, "Pago procesado exitosamente", Toast.LENGTH_LONG).show()
+
+                                    }
                                 }
                                 .addOnFailureListener {
-                                    nfcMessage.value = "Error al procesar el pago"
-                                    isProcessingPayment.value = false
-                                    nfcReadMode.value = false
+                                    runOnUiThread{
+                                        nfcMessage.value = "Error al procesar el pago"
+                                        isProcessingPayment.value = false
+                                        nfcReadMode.value = false
+                                    }
                                 }
                         }
                 } else {
-                    nfcMessage.value = "Saldo insuficiente"
-                    isProcessingPayment.value = false
-                    nfcReadMode.value = false
+                    runOnUiThread{
+                        nfcMessage.value = "Saldo insuficiente"
+                        isProcessingPayment.value = false
+                        nfcReadMode.value = false
+                    }
                 }
             }
             .addOnFailureListener {
-                nfcMessage.value = "Error al obtener datos del pasajero"
-                isProcessingPayment.value = false
-                nfcReadMode.value = false
+                runOnUiThread{
+                    nfcMessage.value = "Error al obtener datos del pasajero"
+                    isProcessingPayment.value = false
+                    nfcReadMode.value = false
+                }
             }
     }
 
@@ -474,6 +497,11 @@ class MainActivity : ComponentActivity() {
             .addOnFailureListener {
                 Log.e("PAGO", "Error al crear registro de pago: ${it.message}")
             }
+    }
+
+    private fun actualizarSaldoUsuario(nuevoSaldo: Double) {
+        saldoActualizado.value = nuevoSaldo
+        debeActualizarSaldo.value = true
     }
 
     private fun enviarNotificacionConductor(conductorId: String, pasajeroNombre: String, monto: Double) {
