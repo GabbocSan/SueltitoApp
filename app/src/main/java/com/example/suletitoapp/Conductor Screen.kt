@@ -18,7 +18,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.sp
 
 @Composable
-fun ConductorScreen(nombre: String, saldo: Double, onCerrarSesion: () -> Unit) {
+fun ConductorScreen(
+    nombre: String,
+    saldo: Double,
+    onCerrarSesion: () -> Unit,
+    onConfigurarNFC: () -> Unit
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -74,7 +79,7 @@ fun ConductorScreen(nombre: String, saldo: Double, onCerrarSesion: () -> Unit) {
 
         // Botones específicos para conductor
         Button(
-            onClick = { /* TODO: Implementar cobro NFC */ },
+            onClick = {onConfigurarNFC()},
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("Cobrar con NFC")

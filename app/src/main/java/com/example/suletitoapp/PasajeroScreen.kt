@@ -22,7 +22,8 @@ import androidx.compose.ui.unit.sp
 fun PasajeroScreen(nombre: String,
                    saldo: Double,
                    onCerrarSesion: () -> Unit,
-                   onRecargarSaldo: () -> Unit
+                   onRecargarSaldo: () -> Unit,
+                   onPagarNFC: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -79,7 +80,7 @@ fun PasajeroScreen(nombre: String,
 
         // Botones para funcionalidades futuras
         Button(
-            onClick = { /* TODO: Implementar pago NFC */ },
+            onClick = {onPagarNFC()},
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("Pagar con NFC")

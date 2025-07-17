@@ -1,6 +1,16 @@
 package com.example.suletitoapp
 
 //Main Activity
+import android.app.PendingIntent
+import android.content.Intent
+import android.content.IntentFilter
+import android.content.pm.PackageManager
+import android.icu.text.SimpleDateFormat
+import android.icu.util.Calendar
+import android.nfc.NfcAdapter
+import android.nfc.Tag
+import android.nfc.tech.Ndef
+import android.nfc.tech.NdefFormatable
 import android.os.Bundle
 import android.util.Log
 import android.widget.Toast
@@ -43,7 +53,7 @@ import java.util.concurrent.TimeUnit
 import com.google.firebase.database.FirebaseDatabase
 import com.example.suletitoapp.model.Usuario
 import androidx.compose.runtime.LaunchedEffect
-
+import java.util.Locale
 
 
 class MainActivity : ComponentActivity() {
@@ -60,12 +70,30 @@ class MainActivity : ComponentActivity() {
     private var currentOnSuccess: ((Usuario) -> Unit)? = null
     private var currentOnNeedRegistration: (() -> Unit)? = null
 
+    // Variables NFC
+    private var nfcAdapter: NfcAdapter? = null
+    private var pendingIntent: PendingIntent? = null
+    private var intentFiltersArray: Array<IntentFilter>? = null
+    private var techListsArray: Array<Array<String>>? = null
+
+    //Estados NFC
+    private val nfcWriteMode = mutableStateOf(false)
+    private val nfcReadMode = mutableStateOf(false)
+    private val nfcMessage = mutableStateOf("")
+    private val isProcessingPayment = mutableStateOf(false)
+    private val currentPaymentAmount = mutableStateOf(0.0)
+    private val currentConductorData = mutableStateOf<Pair<String, String>?>(null)
 
     //Inicio del Programa
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         auth = FirebaseAuth.getInstance()
         enableEdgeToEdge()
+
+        if (!packageManager.hasSystemFeature(PackageManager.FEATURE_NFC)) {
+            Toast.makeText(this, "Este dispositivo no soporta NFC", Toast.LENGTH_LONG).show()
+        }
+        setupNFC()
 
         setContent {
             SuletitoAppTheme {
@@ -116,6 +144,9 @@ class MainActivity : ComponentActivity() {
                                         cerrarSesion()
                                         usuarioActual.value = null
                                         pantallaActual.value = "login"
+                                    },
+                                    onConfigurarNFC = {
+                                        pantallaActual.value = "nfc_conductor"
                                     }
                                 )
                                 "Pasajero" -> PasajeroScreen(
@@ -128,6 +159,9 @@ class MainActivity : ComponentActivity() {
                                     },
                                     onRecargarSaldo = {
                                         pantallaActual.value = "recarga"
+                                    },
+                                    onPagarNFC = {
+                                        pantallaActual.value = "nfc_pago"
                                     }
                                 )
                                 else -> Text("Rol no reconocido")
@@ -152,10 +186,322 @@ class MainActivity : ComponentActivity() {
                             )
                         } ?: Text("Error: Usuario no encontrado")
                     }
+                    "nfc_conductor" -> {
+                        usuarioActual.value?.let { usuario ->
+                            NFCConductorScreen(
+                                conductorNombre = "${usuario.nombres} ${usuario.apellidos}",
+                                onEscribirNFC = {
+                                    iniciarEscrituraNFC(usuario)
+                                },
+                                onCancelar = {
+                                    nfcWriteMode.value = false
+                                    nfcMessage.value = ""
+                                    pantallaActual.value = "principal"
+                                },
+                                isWriting = nfcWriteMode.value,
+                                mensaje = nfcMessage.value
+                            )
+                        }
+                    }
+                    "nfc_pago" -> {
+                        usuarioActual.value?.let { usuario ->
+                            NFCPagoScreen(
+                                pasajeroNombre = "${usuario.nombres} ${usuario.apellidos}",
+                                saldoActual = usuario.saldo,
+                                onPagar = { monto ->
+                                    iniciarPagoNFC(monto, usuario)
+                                },
+                                onCancelar = {
+                                    nfcReadMode.value = false
+                                    isProcessingPayment.value = false
+                                    nfcMessage.value = ""
+                                    pantallaActual.value = "principal"
+                                },
+                                isProcessing = isProcessingPayment.value,
+                                mensaje = nfcMessage.value
+                            )
+                        }
+                    }
+
                 }
             }
 
         }
+    }
+
+    private fun setupNFC() {
+        nfcAdapter = NfcAdapter.getDefaultAdapter(this)
+
+        if (nfcAdapter == null) {
+            Toast.makeText(this, "Este dispositivo no soporta NFC", Toast.LENGTH_LONG).show()
+            return
+        }
+
+        if (!nfcAdapter!!.isEnabled) {
+            Toast.makeText(this, "NFC está deshabilitado. Por favor, habilítalo en Configuración", Toast.LENGTH_LONG).show()
+        }
+
+        // Crear PendingIntent para manejar intenciones NFC
+        pendingIntent = PendingIntent.getActivity(
+            this, 0, Intent(this, javaClass).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            PendingIntent.FLAG_MUTABLE
+        )
+
+
+
+        // Configurar filtros de intención
+        val ndef = IntentFilter(NfcAdapter.ACTION_NDEF_DISCOVERED)
+        try {
+            ndef.addDataType("*/*")
+        } catch (e: IntentFilter.MalformedMimeTypeException) {
+            throw RuntimeException("Error en el filtro MIME", e)
+        }
+        val tech = IntentFilter(NfcAdapter.ACTION_TECH_DISCOVERED)
+        val tag = IntentFilter(NfcAdapter.ACTION_TAG_DISCOVERED)
+
+        intentFiltersArray = arrayOf(ndef, tech, tag)
+
+        // Configurar tecnologías soportadas
+        techListsArray = arrayOf(
+            arrayOf(Ndef::class.java.name),
+            arrayOf(NdefFormatable::class.java.name)
+        )
+    }
+
+    override fun onResume() {
+        super.onResume()
+        nfcAdapter?.enableForegroundDispatch(this, pendingIntent, intentFiltersArray, techListsArray)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        nfcAdapter?.disableForegroundDispatch(this)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleNFCIntent(intent)
+    }
+
+    private fun handleNFCIntent(intent: Intent) {
+        val action = intent.action
+        if (NfcAdapter.ACTION_NDEF_DISCOVERED == action ||
+            NfcAdapter.ACTION_TECH_DISCOVERED == action ||
+            NfcAdapter.ACTION_TAG_DISCOVERED == action) {
+
+            val tag = intent.getParcelableExtra<Tag>(NfcAdapter.EXTRA_TAG)
+            tag?.let {
+                if (nfcWriteMode.value) {
+                    // Modo escritura (conductor)
+                    handleNFCWrite(it)
+                } else if (nfcReadMode.value) {
+                    // Modo lectura (pasajero)
+                    handleNFCRead(it)
+                }
+            }
+        }
+    }
+
+    private fun iniciarEscrituraNFC(usuario: Usuario) {
+        if (nfcAdapter == null) {
+            nfcMessage.value = "NFC no disponible en este dispositivo"
+            return
+        }
+
+        if (!nfcAdapter!!.isEnabled) {
+            nfcMessage.value = "Por favor, habilita NFC en la configuración"
+            try {
+                startActivity(Intent(android.provider.Settings.ACTION_NFC_SETTINGS))
+            } catch (e: Exception) {
+                startActivity(Intent(android.provider.Settings.ACTION_WIRELESS_SETTINGS))
+            }
+            return
+        }
+
+        nfcWriteMode.value = true
+        nfcMessage.value = "Acerca una etiqueta NFC para configurar..."
+        Toast.makeText(this, "Acerca una etiqueta NFC", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun handleNFCWrite(tag: Tag) {
+        val usuario = auth.currentUser
+        val userId = usuario?.uid ?: return
+
+        val db = FirebaseDatabase.getInstance().reference
+        db.child("usuarios").child(userId).get()
+            .addOnSuccessListener { snapshot ->
+                val nombres = snapshot.child("nombres").getValue(String::class.java) ?: ""
+                val apellidos = snapshot.child("apellidos").getValue(String::class.java) ?: ""
+                val nombreCompleto = "$nombres $apellidos"
+
+                runOnUiThread {
+                    val success = NFCUtils.writeNFCTag(tag, userId, nombreCompleto)
+                    if (success) {
+                        nfcMessage.value = "Etiqueta NFC configurada exitosamente"
+                        nfcWriteMode.value = false
+                        Toast.makeText(this, "¡Etiqueta NFC lista para recibir pagos!", Toast.LENGTH_LONG).show()
+                    } else {
+                        nfcMessage.value = "Error al escribir en la etiqueta NFC"
+                        Toast.makeText(this, "Error al escribir NFC. Intenta nuevamente.", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+            .addOnFailureListener {
+                runOnUiThread {
+                    nfcMessage.value = "Error al obtener datos del conductor"
+                    Toast.makeText(this, "Error al obtener datos del usuario", Toast.LENGTH_LONG).show()
+                }
+            }
+    }
+
+    private fun iniciarPagoNFC(monto: Double, usuario: Usuario) {
+        if (nfcAdapter == null) {
+            nfcMessage.value = "NFC no disponible en este dispositivo"
+            return
+        }
+
+        if (!nfcAdapter!!.isEnabled) {
+            nfcMessage.value = "Por favor, habilita NFC en la configuración"
+            return
+        }
+
+        currentPaymentAmount.value = monto
+        nfcReadMode.value = true
+        isProcessingPayment.value = true
+        nfcMessage.value = ""
+        Toast.makeText(this, "Acerca tu teléfono a la etiqueta NFC del conductor", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun handleNFCRead(tag: Tag) {
+        val conductorData = NFCUtils.readNFCTag(tag)
+
+        if (conductorData != null) {
+            currentConductorData.value = conductorData
+            procesarPago(conductorData.first, conductorData.second)
+        } else {
+            nfcMessage.value = "Error al leer la etiqueta NFC"
+            isProcessingPayment.value = false
+            nfcReadMode.value = false
+        }
+    }
+
+    private fun procesarPago(conductorId: String, conductorNombre: String) {
+        val pasajeroId = auth.currentUser?.uid ?: return
+        val monto = currentPaymentAmount.value
+
+        val db = FirebaseDatabase.getInstance().reference
+
+        // Obtener datos del pasajero
+        db.child("usuarios").child(pasajeroId).get()
+            .addOnSuccessListener { pasajeroSnapshot ->
+                val pasajeroNombre = "${pasajeroSnapshot.child("nombres").getValue(String::class.java)} ${pasajeroSnapshot.child("apellidos").getValue(String::class.java)}"
+                val saldoPasajero = pasajeroSnapshot.child("saldo").getValue(Double::class.java) ?: 0.0
+
+                if (saldoPasajero >= monto) {
+                    // Obtener saldo del conductor
+                    db.child("usuarios").child(conductorId).child("saldo").get()
+                        .addOnSuccessListener { conductorSnapshot ->
+                            val saldoConductor = conductorSnapshot.getValue(Double::class.java) ?: 0.0
+
+                            // Realizar la transacción
+                            val nuevoSaldoPasajero = saldoPasajero - monto
+                            val nuevoSaldoConductor = saldoConductor + monto
+
+                            // Actualizar saldos
+                            val updates = mapOf(
+                                "usuarios/$pasajeroId/saldo" to nuevoSaldoPasajero,
+                                "usuarios/$conductorId/saldo" to nuevoSaldoConductor
+                            )
+
+                            db.updateChildren(updates)
+                                .addOnSuccessListener {
+                                    // Crear registro de pago
+                                    crearRegistroPago(pasajeroId, conductorId, pasajeroNombre, conductorNombre, monto)
+
+                                    // Actualizar estado
+                                    nfcMessage.value = "¡Pago exitoso! Bs. $monto"
+                                    isProcessingPayment.value = false
+                                    nfcReadMode.value = false
+
+                                    // Enviar notificación al conductor
+                                    enviarNotificacionConductor(conductorId, pasajeroNombre, monto)
+
+                                    Toast.makeText(this, "Pago procesado exitosamente", Toast.LENGTH_LONG).show()
+                                }
+                                .addOnFailureListener {
+                                    nfcMessage.value = "Error al procesar el pago"
+                                    isProcessingPayment.value = false
+                                    nfcReadMode.value = false
+                                }
+                        }
+                } else {
+                    nfcMessage.value = "Saldo insuficiente"
+                    isProcessingPayment.value = false
+                    nfcReadMode.value = false
+                }
+            }
+            .addOnFailureListener {
+                nfcMessage.value = "Error al obtener datos del pasajero"
+                isProcessingPayment.value = false
+                nfcReadMode.value = false
+            }
+    }
+
+    private fun crearRegistroPago(pasajeroId: String, conductorId: String, pasajeroNombre: String, conductorNombre: String, monto: Double) {
+        val db = FirebaseDatabase.getInstance().reference
+        val pagoId = db.child("pagos").push().key ?: return
+
+        val calendario = Calendar.getInstance()
+        val formatoFecha = SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault())
+        val formatoHora = SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault())
+
+        val pago = Pago(
+            id = pagoId,
+            pasajeroId = pasajeroId,
+            conductorId = conductorId,
+            pasajeroNombre = pasajeroNombre,
+            conductorNombre = conductorNombre,
+            monto = monto,
+            fecha = formatoFecha.format(calendario.time),
+            hora = formatoHora.format(calendario.time),
+            timestamp = calendario.timeInMillis
+        )
+
+        db.child("pagos").child(pagoId).setValue(pago)
+            .addOnSuccessListener {
+                Log.d("PAGO", "Registro de pago creado exitosamente")
+            }
+            .addOnFailureListener {
+                Log.e("PAGO", "Error al crear registro de pago: ${it.message}")
+            }
+    }
+
+    private fun enviarNotificacionConductor(conductorId: String, pasajeroNombre: String, monto: Double) {
+        val db = FirebaseDatabase.getInstance().reference
+        val notificacionId = db.child("notificaciones").push().key ?: return
+
+        val calendario = Calendar.getInstance()
+        val formatoFecha = SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault())
+        val formatoHora = SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault())
+
+        val notificacion = mapOf(
+            "id" to notificacionId,
+            "conductorId" to conductorId,
+            "titulo" to "Pago recibido",
+            "mensaje" to "Has recibido un pago de Bs. $monto de $pasajeroNombre",
+            "fecha" to formatoFecha.format(calendario.time),
+            "hora" to formatoHora.format(calendario.time),
+            "timestamp" to calendario.timeInMillis,
+            "leida" to false
+        )
+
+        db.child("notificaciones").child(notificacionId).setValue(notificacion)
+            .addOnSuccessListener {
+                Log.d("NOTIFICACION", "Notificación enviada al conductor")
+            }
+            .addOnFailureListener {
+                Log.e("NOTIFICACION", "Error al enviar notificación: ${it.message}")
+            }
     }
 
     private fun sendVerificationCode(phoneNumber: String) {
