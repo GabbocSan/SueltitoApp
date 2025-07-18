@@ -150,6 +150,9 @@ class MainActivity : ComponentActivity() {
                                     },
                                     onConfigurarNFC = {
                                         pantallaActual.value = "nfc_conductor"
+                                    },
+                                    onVerHistorial = {
+                                        pantallaActual.value = "historial_conductor"
                                     }
                                 )
                                 "Pasajero" -> PasajeroScreen(
@@ -165,6 +168,9 @@ class MainActivity : ComponentActivity() {
                                     },
                                     onPagarNFC = {
                                         pantallaActual.value = "nfc_pago"
+                                    },
+                                    onVerHistorial = {
+                                        pantallaActual.value = "historial_pasajero"
                                     }
                                 )
                                 else -> Text("Rol no reconocido")
@@ -230,6 +236,32 @@ class MainActivity : ComponentActivity() {
                                 mensaje = nfcMessage.value,
 
                             )
+                        }
+                    }
+                    "historial_pasajero" -> {
+                        val userId = auth.currentUser?.uid
+                        if (userId != null) {
+                            HistorialPasajeroScreen(
+                                pasajeroId = userId,
+                                onVolver = {
+                                    pantallaActual.value = "principal"
+                                }
+                            )
+                        } else {
+                            Text("Error: Usuario no autenticado")
+                        }
+                    }
+                    "historial_conductor" -> {
+                        val userId = auth.currentUser?.uid
+                        if (userId != null) {
+                            HistorialConductorScreen(
+                                conductorId = userId,
+                                onVolver = {
+                                    pantallaActual.value = "principal"
+                                }
+                            )
+                        } else {
+                            Text("Error: Usuario no autenticado")
                         }
                     }
 
@@ -772,6 +804,9 @@ class MainActivity : ComponentActivity() {
             Toast.makeText(this, "Error: Usuario no autenticado", Toast.LENGTH_SHORT).show()
         }
     }
+
+
+
 }
 
 
@@ -871,8 +906,6 @@ fun LoginScreen(
         ) {
             Text("¿No tienes cuenta? Regístrate")
         }
-
-
     }
 }
 

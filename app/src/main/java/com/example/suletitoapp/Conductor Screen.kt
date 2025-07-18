@@ -22,7 +22,8 @@ fun ConductorScreen(
     nombre: String,
     saldo: Double,
     onCerrarSesion: () -> Unit,
-    onConfigurarNFC: () -> Unit
+    onConfigurarNFC: () -> Unit,
+    onVerHistorial: ()->Unit
 ) {
     Column(
         modifier = Modifier
@@ -97,7 +98,7 @@ fun ConductorScreen(
         Spacer(modifier = Modifier.height(16.dp))
 
         Button(
-            onClick = { /* TODO: Implementar historial */ },
+            onClick = {onVerHistorial()},
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("Ver historial de cobros")

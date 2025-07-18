@@ -23,7 +23,8 @@ fun PasajeroScreen(nombre: String,
                    saldo: Double,
                    onCerrarSesion: () -> Unit,
                    onRecargarSaldo: () -> Unit,
-                   onPagarNFC: () -> Unit
+                   onPagarNFC: () -> Unit,
+                   onVerHistorial: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -98,7 +99,7 @@ fun PasajeroScreen(nombre: String,
         Spacer(modifier = Modifier.height(16.dp))
 
         Button(
-            onClick = { /* TODO: Implementar historial */ },
+            onClick = {onVerHistorial()},
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("Ver historial")
